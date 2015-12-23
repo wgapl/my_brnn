@@ -1,1 +1,1 @@
-A quick and dirty bidirectional RNN layer written in Python.
+Quick and dirty bidirectional RNN layer written in Python.

@@ -11,8 +11,17 @@ from numpy.random import random
 from string import printable
 
 
-def sigmoid(z):
-    return 1./(1.+np.exp(-z))
+def activation(z, method="tanh"):
+    """
+    """
+    if method == "tanh":
+        return tanh(z)
+    elif method == "linear":
+        return z
+    elif method == "sigmoid":
+        return 1./(1.+np.exp(-z))
+
+
 
 def gen_bag_hashtable():
     N = len(printable)
@@ -52,10 +61,12 @@ class BRNNLayer:
         b_y -- n_out X 1 output bias vector
 
         """
+        # basic layer dimensions -- determines size of weight matrices
         self.n_in = n_in
         self.n_hidden = n_hidden
         self.n_out = n_out
 
+        ###---!!! MODEL PARAMETERS !!!---###
         x_ind = 2 * n_in * n_hidden # num params in W_x
         self.W_x = params[:x_ind].reshape((2*n_hidden, n_in)) # Concatenated input weight matrices
 
@@ -73,30 +84,43 @@ class BRNNLayer:
         """
         Bidirectional RNN update of output sequence based on paper @
         http://www.cs.toronto.edu/~graves/asru_2013.pdf
+
+        So I basically keep a single function as a member of the BRNNLayer struct
+        just for making a prediction based on a sequence of input data.
+        Still not really OOP if you ask me, and I'm fine with that.
         """
         n_in = self.n_in
         n_hidden = self.n_hidden
         n_out = self.n_out
         T = X.shape[1] # length of input/output sequence
 
-        if X.shape[0] != n_in:
-            return "Size of feature space of data and network disagree"
+        # b_f = self.bias[:n_hidden] -- forward bias
+        # b_b = self.bias[n_hidden:2*n_hidden] -- backward bias
+        # b_y = self.bias[2*n_hidden:] -- output bias
 
         # Only depends on values in X
-        Wx = np.dot(self.W_x, X) # Compute the values of input connections
+        Wx = np.dot(self.W_x, X) # Compute the values from input connections
 
         # Initializing hidden state matrix
         H = np.zeros((2*n_hidden,T))
-        H[:n_hidden,0] = tanh(Wx[:n_hidden,0]+self.bias[:n_hidden])
-        H[n_hidden:,T-1] = tanh(Wx[n_hidden:,T-1]+self.bias[n_hidden:2*n_hidden])
+
+        # First and last sequences don't have a predecessor, so they get special
+        # consideration. Prime the pump.
+        H[:n_hidden,0] = activation(Wx[:n_hidden,0]+self.bias[:n_hidden])
+        H[n_hidden:,T-1] = activation(Wx[n_hidden:,T-1]+self.bias[n_hidden:2*n_hidden])
+
+        # Iterate over the sequence.
         for k in range(1,T):
-            H[:n_hidden,k] = tanh(Wx[:n_hidden,k] + \
+            # Calculate forward hidden values according to rules in paper.
+            H[:n_hidden,k] = activation(Wx[:n_hidden,k] + \
             np.dot(self.W_h[:n_hidden,:],H[:n_hidden,k-1]) + self.bias[:n_hidden])
 
-            H[n_hidden:,T-k-1] = tanh(Wx[n_hidden:,T-k-1] + \
+            # Populate backward hidden states going backward across sequence
+            H[n_hidden:,T-k-1] = activation(Wx[n_hidden:,T-k-1] + \
             np.dot(self.W_h[n_hidden:,:],H[:n_hidden,T-k]) + self.bias[n_hidden:2*n_hidden])
 
-        return np.dot(self.W_y,H) + np.tile(self.bias[2*n_hidden:], (T,1)).T
+        return activation(np.dot(self.W_y,H) + np.tile(self.bias[2*n_hidden:], (T,1)).T,
+            method="linear")
 
 
 def rudimentary_test():
@@ -104,6 +128,11 @@ def rudimentary_test():
     Very simple test of BRNNLayer functionality. I'm training a DQN for
     Space Invaders right now and I don't really want to get into any training
     until my GPU is free for all the matrix multiplication.
+
+    Right now this is just a fun example of how to multiply random numbers
+    to get more random numbers. I might add in some objective costs along with
+    some optimization routines, but I would likely make a new repository for
+    my optimization function.
     """
 
     s = """0 a is the quick fox who jumped over the lazy brown dog's new sentence."""

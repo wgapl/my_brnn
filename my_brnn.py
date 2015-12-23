@@ -13,6 +13,8 @@ from string import printable
 
 def activation(z, method="tanh"):
     """
+    Defaults to "tanh".
+    Probably shouldn't ever neglect to use that, but whatever.
     """
     if method == "tanh":
         return tanh(z)
@@ -94,14 +96,24 @@ class BRNNLayer:
         n_out = self.n_out
         T = X.shape[1] # length of input/output sequence
 
+        # For the reader:
         # b_f = self.bias[:n_hidden] -- forward bias
         # b_b = self.bias[n_hidden:2*n_hidden] -- backward bias
         # b_y = self.bias[2*n_hidden:] -- output bias
 
-        # Only depends on values in X
+        # Many values need to calculate hidden states only depend on quantities in X
         Wx = np.dot(self.W_x, X) # Compute the values from input connections
 
         # Initializing hidden state matrix
+        #      _                            _
+        #     |                              |
+        #     |  hf_0  hf_1  hf_2 ... hf_T-1 |
+        # H = |                              |
+        #     |  hb_0  hb_1  hb_2 ... hb_T-1 |
+        #     |_                            _|
+        #
+        # where hf_0..T-1 are column vectors representing forward hidden states
+        # and hb_0..T-1 are column vectors representing backward hidden states
         H = np.zeros((2*n_hidden,T))
 
         # First and last sequences don't have a predecessor, so they get special
@@ -109,16 +121,17 @@ class BRNNLayer:
         H[:n_hidden,0] = activation(Wx[:n_hidden,0]+self.bias[:n_hidden])
         H[n_hidden:,T-1] = activation(Wx[n_hidden:,T-1]+self.bias[n_hidden:2*n_hidden])
 
-        # Iterate over the sequence.
+        # Iterate over the sequence forward and backwards.
         for k in range(1,T):
-            # Calculate forward hidden values according to rules in paper.
+            # FORWARD: calculate forard hidden values according to rules in paper.
             H[:n_hidden,k] = activation(Wx[:n_hidden,k] + \
             np.dot(self.W_h[:n_hidden,:],H[:n_hidden,k-1]) + self.bias[:n_hidden])
 
-            # Populate backward hidden states going backward across sequence
-            H[n_hidden:,T-k-1] = activation(Wx[n_hidden:,T-k-1] + \
+            # BACKWARD: populate backward hidden states in reverse order across sequence
+            H[n_hidden:,T-1-k] = activation(Wx[n_hidden:,T-1-k] + \
             np.dot(self.W_h[n_hidden:,:],H[:n_hidden,T-k]) + self.bias[n_hidden:2*n_hidden])
 
+        # Now that H has been calculated, finding the layer output is straightforward
         return activation(np.dot(self.W_y,H) + np.tile(self.bias[2*n_hidden:], (T,1)).T,
             method="linear")
 
